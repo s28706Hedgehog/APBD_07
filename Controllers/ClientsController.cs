@@ -53,9 +53,12 @@ public class ClientsController(IConfiguration config) : ControllerBase
         if (result.Count == 0)
         {
             // From what I remember we will handle it in different layer
-            throw new NotFoundException(
-                "Either client with provided Id does not exist or there are no trips registered");
             // Probably I should check which one but well...
+
+            // throw new NotFoundException(
+            //     "Either client with provided Id does not exist or there are no trips registered");
+
+            return NotFound("Either client with provided Id does not exist or there are no trips registered");
         }
 
         return Ok(result);
@@ -112,7 +115,8 @@ public class ClientsController(IConfiguration config) : ControllerBase
 
         if (Convert.ToInt32(clientCheckResult) == 0)
         {
-            throw new NotFoundException($"Client with that Id does not exist [ClientId:{clientId}]");
+            // throw new NotFoundException($"Client with that Id does not exist [ClientId:{clientId}]");
+            return NotFound($"Client with that Id does not exist [ClientId:{clientId}]");
         }
 
         // Checks if trip with specified id exists in database
@@ -124,7 +128,8 @@ public class ClientsController(IConfiguration config) : ControllerBase
 
         if (Convert.ToInt32(tripCheckResult) == 0)
         {
-            throw new NotFoundException($"Trip with that Id does not exist [TripId:{tripId}]");
+            // throw new NotFoundException($"Trip with that Id does not exist [TripId:{tripId}]");
+            return NotFound($"Trip with that Id does not exist [TripId:{tripId}]");
         }
 
         // Another chcek, Yeeeeeeeeeeeeeeeeey, otherwise it throws Exception for existing keys
@@ -138,7 +143,10 @@ public class ClientsController(IConfiguration config) : ControllerBase
         var alreadyResult = await alreadyRegistCommand.ExecuteScalarAsync();
         var isAlready = Convert.ToInt32(alreadyResult) > 0;
         if (isAlready)
-            throw new InvalidOperationException("Client is already registered for this trip -_-");
+        {
+            // throw new InvalidOperationException("Client is already registered for this trip -_-");
+            return Conflict("Client is already registered for this trip -_-");
+        }
 
         // Checks if limit of clients for this trip has been reached
         var sqlCountClientsOnTrip = "SELECT COUNT(*) FROM Client_Trip WHERE IdTrip = @tripId;";
@@ -196,7 +204,8 @@ public class ClientsController(IConfiguration config) : ControllerBase
 
         if (Convert.ToInt32(clientCheckResult) == 0)
         {
-            throw new NotFoundException($"Client with that Id does not exist [ClientId:{clientId}]");
+            // throw new NotFoundException($"Client with that Id does not exist [ClientId:{clientId}]");
+            return NotFound($"Client with that Id does not exist [ClientId:{clientId}]");
         }
 
         // Checks if trip with specified id exists in database
@@ -208,7 +217,8 @@ public class ClientsController(IConfiguration config) : ControllerBase
 
         if (Convert.ToInt32(tripCheckResult) == 0)
         {
-            throw new NotFoundException($"Trip with that Id does not exist [TripId:{tripId}]");
+            // throw new NotFoundException($"Trip with that Id does not exist [TripId:{tripId}]");
+            return NotFound($"Trip with that Id does not exist [TripId:{tripId}]");
         }
 
         var isRegisteredForTrip = """
@@ -221,8 +231,11 @@ public class ClientsController(IConfiguration config) : ControllerBase
         var alreadyResult = await alreadyRegistCommand.ExecuteScalarAsync();
         var isAlready = Convert.ToInt32(alreadyResult) > 0;
         if (!isAlready)
-            throw new InvalidOperationException(
-                "He is to poor to register for trip and you want to remove him from trip? Sadeg :(");
+        {
+            // throw new InvalidOperationException(
+            //     "He is to poor to register for trip and you want to remove him from trip? Sadeg :(");
+            return Conflict("Client is not registered for this trip, can't delete registration");
+        }
 
         // Registering client for trip FINALLY
         // payment may be null
@@ -235,6 +248,7 @@ public class ClientsController(IConfiguration config) : ControllerBase
 
         await insertCommand.ExecuteNonQueryAsync();
 
-        return Ok("Client registered for trip successfully, yey :D");
+        // https://stackoverflow.com/questions/25970523/restful-what-should-a-delete-response-body-contain
+        return NoContent();
     }
 }

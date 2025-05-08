@@ -49,6 +49,11 @@ public class TripsController(IConfiguration config) : ControllerBase
             );
         }
 
+        if (!result.Any())
+        {
+            return NotFound("Database does not have that data");
+        }
+
         return Ok(result);
     }
 }
