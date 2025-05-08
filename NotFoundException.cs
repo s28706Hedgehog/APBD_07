@@ -1,6 +1,3 @@
 ﻿namespace APBD_07;
 
-public class NotFoundException
-{
-    
-}
+public class NotFoundException(string message) : Exception(message);
