@@ -98,6 +98,143 @@ public class ClientsController(IConfiguration config) : ControllerBase
     [HttpPut("{clientId}/trips/{tripId}")]
     public async Task<IActionResult> RegisterClientOnTrip(int clientId, int tripId)
     {
-        return null;
+        var connectionString = config.GetConnectionString("Default");
+
+        await using var connection = new SqlConnection(connectionString); // automatically closes connection when done
+
+        // Checks if client with specified id exists in database
+        var sqlClientCheck = "SELECT COUNT(*) FROM Client WHERE Client.IdClient = @clientId;";
+        await using var clientCheckCommand = new SqlCommand(sqlClientCheck, connection);
+        clientCheckCommand.Parameters.AddWithValue("@clientId", clientId);
+
+        await connection.OpenAsync();
+        var clientCheckResult = await clientCheckCommand.ExecuteScalarAsync();
+
+        if (Convert.ToInt32(clientCheckResult) == 0)
+        {
+            throw new NotFoundException($"Client with that Id does not exist [ClientId:{clientId}]");
+        }
+
+        // Checks if trip with specified id exists in database
+        var sqlTripCheck = "SELECT COUNT(*) FROM Trip WHERE Trip.IdTrip = @tripId; ";
+        await using var tripCheckCommand = new SqlCommand(sqlTripCheck, connection);
+        tripCheckCommand.Parameters.AddWithValue("@tripId", tripId);
+
+        var tripCheckResult = await tripCheckCommand.ExecuteScalarAsync();
+
+        if (Convert.ToInt32(tripCheckResult) == 0)
+        {
+            throw new NotFoundException($"Trip with that Id does not exist [TripId:{tripId}]");
+        }
+
+        // Another chcek, Yeeeeeeeeeeeeeeeeey, otherwise it throws Exception for existing keys
+        var sqlAlreadyRegistered = """
+                                       SELECT COUNT(*) FROM Client_Trip 
+                                       WHERE IdClient = @clientId AND IdTrip = @tripId;
+                                   """;
+        await using var alreadyRegistCommand = new SqlCommand(sqlAlreadyRegistered, connection);
+        alreadyRegistCommand.Parameters.AddWithValue("@clientId", clientId);
+        alreadyRegistCommand.Parameters.AddWithValue("@tripId", tripId);
+        var alreadyResult = await alreadyRegistCommand.ExecuteScalarAsync();
+        var isAlready = Convert.ToInt32(alreadyResult) > 0;
+        if (isAlready)
+            throw new InvalidOperationException("Client is already registered for this trip -_-");
+
+        // Checks if limit of clients for this trip has been reached
+        var sqlCountClientsOnTrip = "SELECT COUNT(*) FROM Client_Trip WHERE IdTrip = @tripId;";
+        var sqlMaxPeople = "SELECT MaxPeople FROM Trip WHERE IdTrip = @tripId;";
+
+        await using var clientCountCommand = new SqlCommand(sqlCountClientsOnTrip, connection);
+        clientCountCommand.Parameters.AddWithValue("@tripId", tripId);
+        var clientCountResult = await clientCountCommand.ExecuteScalarAsync();
+        int currentCount = Convert.ToInt32(clientCountResult);
+        // Probably better to limit number of SQL requests to reduce I/O operations
+
+        await using var maxPeopleCommand = new SqlCommand(sqlMaxPeople, connection);
+        maxPeopleCommand.Parameters.AddWithValue("@tripId", tripId);
+        var maxPeopleResult = await maxPeopleCommand.ExecuteScalarAsync();
+        int maxPeople = Convert.ToInt32(maxPeopleResult);
+
+        if (currentCount >= maxPeople)
+            return BadRequest("This trip has reached maximum number of clients");
+
+        // Registering client for trip FINALLY
+        // payment may be null
+        var sqlInsert = """
+                            INSERT INTO Client_Trip (IdClient, IdTrip, RegisteredAt)
+                            VALUES (@clientId, @tripId, @registeredAt);
+                        """;
+        await using var insertCommand = new SqlCommand(sqlInsert, connection);
+        insertCommand.Parameters.AddWithValue("@clientId", clientId);
+        insertCommand.Parameters.AddWithValue("@tripId", tripId);
+        // insertCommand.Parameters.AddWithValue("@registeredAt", DateTime.Now.Ticks); // Why are you int
+        insertCommand.Parameters.AddWithValue("@registeredAt",
+            (int)(DateTimeOffset.Now).ToUnixTimeSeconds()); // Why are you int
+
+        await insertCommand.ExecuteNonQueryAsync();
+
+        return Ok("Client registered for trip successfully, yey :D");
+    }
+
+    /**
+ * Removes client from specified by id trip
+ */
+    [HttpDelete("{clientId}/trips/{tripId}")]
+    public async Task<IActionResult> RemoveClientFromTrip(int clientId, int tripId)
+    {
+        var connectionString = config.GetConnectionString("Default");
+
+        await using var connection = new SqlConnection(connectionString); // automatically closes connection when done
+
+        // Checks if client with specified id exists in database
+        var sqlClientCheck = "SELECT COUNT(*) FROM Client WHERE Client.IdClient = @clientId;";
+        await using var clientCheckCommand = new SqlCommand(sqlClientCheck, connection);
+        clientCheckCommand.Parameters.AddWithValue("@clientId", clientId);
+
+        await connection.OpenAsync();
+        var clientCheckResult = await clientCheckCommand.ExecuteScalarAsync();
+
+        if (Convert.ToInt32(clientCheckResult) == 0)
+        {
+            throw new NotFoundException($"Client with that Id does not exist [ClientId:{clientId}]");
+        }
+
+        // Checks if trip with specified id exists in database
+        var sqlTripCheck = "SELECT COUNT(*) FROM Trip WHERE Trip.IdTrip = @tripId; ";
+        await using var tripCheckCommand = new SqlCommand(sqlTripCheck, connection);
+        tripCheckCommand.Parameters.AddWithValue("@tripId", tripId);
+
+        var tripCheckResult = await tripCheckCommand.ExecuteScalarAsync();
+
+        if (Convert.ToInt32(tripCheckResult) == 0)
+        {
+            throw new NotFoundException($"Trip with that Id does not exist [TripId:{tripId}]");
+        }
+
+        var isRegisteredForTrip = """
+                                      SELECT COUNT(*) FROM Client_Trip 
+                                      WHERE IdClient = @clientId AND IdTrip = @tripId;
+                                  """;
+        await using var alreadyRegistCommand = new SqlCommand(isRegisteredForTrip, connection);
+        alreadyRegistCommand.Parameters.AddWithValue("@clientId", clientId);
+        alreadyRegistCommand.Parameters.AddWithValue("@tripId", tripId);
+        var alreadyResult = await alreadyRegistCommand.ExecuteScalarAsync();
+        var isAlready = Convert.ToInt32(alreadyResult) > 0;
+        if (!isAlready)
+            throw new InvalidOperationException(
+                "He is to poor to register for trip and you want to remove him from trip? Sadeg :(");
+
+        // Registering client for trip FINALLY
+        // payment may be null
+        var sqlDelete = """
+                            DELETE FROM Client_Trip WHERE IdClient = @clientId AND IdTrip = @tripId
+                        """;
+        await using var insertCommand = new SqlCommand(sqlDelete, connection);
+        insertCommand.Parameters.AddWithValue("@clientId", clientId);
+        insertCommand.Parameters.AddWithValue("@tripId", tripId);
+
+        await insertCommand.ExecuteNonQueryAsync();
+
+        return Ok("Client registered for trip successfully, yey :D");
     }
 }
