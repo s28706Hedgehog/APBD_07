@@ -10,12 +10,7 @@ public class Program
         builder.Services.AddAuthorization();
         builder.Services.AddControllers();
         builder.Services.AddOpenApi();
-
-        builder.Services.AddAutoMapper(cfg =>
-        {
-            // cfg.CreateMap()
-        });
-
+        
         var app = builder.Build();
 
         if (app.Environment.IsDevelopment())
